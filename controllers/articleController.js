@@ -1,34 +1,15 @@
 "use strict";
 
-var response = require("../res");
-var connection = require("../conn");
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-      cb(null, DIR);
-  },
-  filename: (req, file, cb) => {
-      const fileName = file.originalname.toLowerCase().split(' ').join('-');
-      cb(null, uuidv4() + '-' + fileName)
-  }
-});
-
-var upload = multer({
-  storage: storage,
-  fileFilter: (req, file, cb) => {
-      if (file.mimetype == "image/png" || file.mimetype == "image/jpg" || file.mimetype == "image/jpeg") {
-          cb(null, true);
-      } else {
-          cb(null, false);
-          return cb(new Error('Only .png, .jpg and .jpeg format allowed!'));
-      }
-  }
-});
-
+var response = require("../res"),
+  connection = require("../conn"),
+  // path = require("path"),
+  multer = require("multer"),
+  helpers = require("../helpers"),
+  {v4: uuidv4} = require("uuid");
 
 exports.getArticle = function (req, res) {
   var q =
-    "SELECT title, img, created_datetime FROM articles ORDER BY created_datetime DESC";
+    "SELECT title, uuid, created_datetime FROM articles ORDER BY created_datetime DESC";
 
   connection.query(q, [], function (error, rows) {
     if (error) {
@@ -54,27 +35,66 @@ exports.getArticleDetails = function (req, res) {
 };
 
 exports.postArticle = function (req, res) {
+  // 10 is the limit I've defined for number of uploaded files at once
+  // 'multiple_images' is the name of our file input field
   var title = req.body.title;
   var body = req.body.body;
   var author = req.body.author;
   var article_source = req.body.article_source;
-  // var img = req.body.img;
+  var uuid = uuidv4();
 
-  var q = "INSERT INTO articles (title, body, author, article_source, created_datetime) VALUES (?, ?, ?, ?, NOW())";
-
-  connection.query(q, [
-      title,
-      body,
-      author,
-      article_source,
-      // img
-    ], function (error) {
-    if (error) {
-      console.log(error);
-    } else {
-      response.ok("Success posting article!", res);
-    }
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, DIR);
+    },
+    filename: (req, file, cb) => {
+      const fileName = file.originalname.toLowerCase().split(" ").join("-");
+      cb(null, uuid + "-" + fileName);
+    },
   });
+
+  var upload = multer({
+    storage: storage,
+    fileFilter: helpers.imageFilter,
+  }).array("multiple_images", 3);
+
+  upload(req, res, function (err) {
+    if (req.fileValidationError) {
+      return res.send(req.fileValidationError);
+    } else if (!req.file) {
+      return res.send("Please select an image to upload");
+    } else if (err instanceof multer.MulterError) {
+      return res.send(err);
+    } else if (err) {
+      return res.send(err);
+    }
+
+    // var result = "You have uploaded these images: <hr />";
+    // const files = req.files;
+    // var index, len;
+
+    // // Loop through all the uploaded images and display them on frontend
+    // for (index = 0, len = files.length; index < len; ++index) {
+    //   result += `<img src="${files[index].path}" width="300" style="margin-right: 20px;">`;
+    // }
+    // // result += '<hr/><a href="./">Upload more images</a>';
+    // res.send(result);
+  });
+
+  var q =
+    "INSERT INTO articles (title, body, author, article_source, created_datetime) VALUES (?, ?, ?, ?, NOW(), ?)";
+
+  connection.query(
+    q,
+    [title, body, author, article_source, uuid],
+    function (error) {
+      if (error) {
+        console.log(error);
+      } else {
+        response.ok("Success posting article!", res);
+      }
+    }
+  );
 };
 
 // exports.addItems = function(req, res) {

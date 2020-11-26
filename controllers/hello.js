@@ -1,8 +1,7 @@
 'use strict';
 
 var response = require('../res');
-var connection = require('../conn');
 
-exports.index = function(req, res) {
+exports.index = function(res) {
     response.ok("You are one curious monkey!", res)
 };
